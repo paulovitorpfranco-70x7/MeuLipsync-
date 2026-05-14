@@ -181,10 +181,11 @@ lipsync/
 fastapi==0.115.0
 uvicorn[standard]==0.30.0
 python-multipart==0.0.9
-pydantic==2.9.0
+pydantic>=2.9,<3.0
 ```
 
 > FFmpeg precisa estar instalado no sistema e disponível no `PATH`; ele não será instalado pelo `requirements.txt`.
+> `pydantic` fica em faixa compatível para permitir wheels prontas em versões novas do Python, como Python 3.14, evitando compilação local de `pydantic-core`.
 
 ---
 
