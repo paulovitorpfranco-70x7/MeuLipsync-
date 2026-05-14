@@ -70,11 +70,20 @@ lipsync/
 > [!IMPORTANT]
 > **SadTalker como Placeholder:** A função `generate_lipsync_clip()` será implementada como um placeholder que gera um vídeo simples (imagem estática + áudio) usando FFmpeg. Quando o SadTalker for integrado, basta substituir o corpo dessa função.
 
+> [!IMPORTANT]
+> **FFmpeg via subprocess:** Os comandos `ffmpeg` e `ffprobe` serão executados diretamente com `subprocess.run(..., check=True)`, sem depender de wrappers como `ffmpeg-python`. Isso mantém o pipeline explícito, simples de debugar e alinhado aos comandos documentados neste plano.
+
 > [!NOTE]
 > **Divisão em Trechos:** Áudios maiores que 10s serão divididos em chunks de até 10s. Isso simula a limitação real do SadTalker, que tem melhor performance em clips curtos. Cada chunk gera um clipe que depois é concatenado.
 
 > [!NOTE]
 > **Processamento Assíncrono:** O endpoint de geração usa `BackgroundTasks` do FastAPI. O frontend faz polling no status via um endpoint dedicado.
+
+> [!NOTE]
+> **Estado dos Jobs em Memória:** O status dos jobs ficará em um dicionário em memória por ser uma ferramenta local. Se o backend reiniciar, jobs em andamento ou concluídos deixam de estar registrados. Persistência em SQLite ou arquivo JSON pode ser adicionada depois, se necessário.
+
+> [!NOTE]
+> **Diretórios Gerados:** O projeto usa `outputs/` para vídeos finais. O `.gitignore` deve ignorar `outputs/`, `temp/` e `uploads/` para não versionar arquivos gerados, mídia enviada ou artefatos temporários.
 
 ---
 
@@ -90,7 +99,7 @@ lipsync/
 - Definir `MAX_CHUNK_DURATION = 10` (segundos)
 
 #### [NEW] [schemas/models.py](file:///c:/Users/User/Documents/PAULO%20VITOR/lipsync/backend/schemas/models.py)
-- `GenerateRequest`: modelo com `duration: int`, `style: str`
+- Não criar `GenerateRequest` para `/api/generate`, pois esse endpoint recebe `multipart/form-data` com `UploadFile` e campos `Form`
 - `GenerateResponse`: modelo com `job_id: str`, `status: str`
 - `JobStatus`: modelo com `job_id: str`, `status: str` (pending/processing/completed/failed), `progress: int` (0-100), `video_url: Optional[str]`, `error: Optional[str]`
 
@@ -119,9 +128,9 @@ lipsync/
 - `GET /api/download/{job_id}` — Retorna o arquivo de vídeo como `FileResponse`
 
 #### [NEW] [services/audio_processor.py](file:///c:/Users/User/Documents/PAULO%20VITOR/lipsync/backend/services/audio_processor.py)
-- `get_audio_duration(audio_path: str) -> float` — Usa `ffprobe` para obter duração
-- `trim_audio(audio_path: str, duration: int, output_path: str) -> str` — Corta áudio na duração especificada usando FFmpeg
-- `split_audio_chunks(audio_path: str, chunk_duration: int = 10) -> List[str]` — Divide o áudio em chunks de até N segundos. Retorna lista de caminhos dos chunks. Se duração ≤ chunk_duration, retorna lista com um único item
+- `get_audio_duration(audio_path: str) -> float` — Usa `ffprobe` via `subprocess.run` para obter duração
+- `trim_audio(audio_path: str, duration: int, output_path: str) -> str` — Corta áudio na duração especificada usando `ffmpeg` via `subprocess.run`
+- `split_audio_chunks(audio_path: str, chunk_duration: int = 10) -> List[str]` — Divide o áudio em chunks de até N segundos usando `ffmpeg` via `subprocess.run`. Retorna lista de caminhos dos chunks. Se duração ≤ chunk_duration, retorna lista com um único item
 
 #### [NEW] [services/lipsync_engine.py](file:///c:/Users/User/Documents/PAULO%20VITOR/lipsync/backend/services/lipsync_engine.py)
 - `generate_lipsync_clip(image_path: str, audio_chunk_path: str, style: str, output_path: str) -> str`
@@ -172,9 +181,10 @@ lipsync/
 fastapi==0.115.0
 uvicorn[standard]==0.30.0
 python-multipart==0.0.9
-ffmpeg-python==0.2.0
 pydantic==2.9.0
 ```
+
+> FFmpeg precisa estar instalado no sistema e disponível no `PATH`; ele não será instalado pelo `requirements.txt`.
 
 ---
 
@@ -182,13 +192,14 @@ pydantic==2.9.0
 
 #### [NEW] Projeto Next.js
 - Inicializar com `npx -y create-next-app@latest ./frontend` (App Router, sem TypeScript, sem Tailwind, com src/, sem Turbopack)
+- Se o comando não estiver disponível por restrição de rede/ambiente, criar manualmente a estrutura mínima do Next.js com `package.json`, `next.config.js`, `jsconfig.json`, `src/app` e `src/components`
 
 #### [NEW] [src/app/globals.css](file:///c:/Users/User/Documents/PAULO%20VITOR/lipsync/frontend/src/app/globals.css)
 - **Design System Completo:**
-  - Tema escuro com gradientes vibrantes (roxo/azul/ciano)
+  - Tema escuro operacional com base neutra e acentos controlados em ciano, magenta, verde e âmbar, evitando domínio visual de uma única família de cor
   - Variáveis CSS para cores, espaçamentos, bordas, sombras
   - Fonte: Inter (Google Fonts)
-  - Glassmorphism nos cards
+  - Superfícies translúcidas moderadas apenas onde ajudarem a separar upload, configuração e preview
   - Animações suaves: fade-in, pulse, shimmer
   - Responsivo para desktop e mobile
   - Estilização completa de todos os componentes
@@ -361,11 +372,11 @@ sequenceDiagram
 ```
 
 ### Estética
-- **Tema:** Dark mode com gradientes roxo → azul → ciano
-- **Cards:** Glassmorphism (fundo semi-transparente + blur)
+- **Tema:** Dark mode com base neutra e acentos em ciano, magenta, verde e âmbar
+- **Superfícies:** Blocos bem definidos para upload, configuração e preview, com transparência moderada e sem excesso de cards aninhados
 - **Fonte:** Inter (Google Fonts)
 - **Animações:** Fade-in nos componentes, pulse na barra de progresso, hover com scale nos botões
-- **Botão principal:** Gradiente animado com glow
+- **Botão principal:** Contraste alto, estado hover claro e feedback de carregamento enquanto o job está em execução
 
 ---
 
