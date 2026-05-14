@@ -26,6 +26,7 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+.codex
 
 # Modelos e pesos (podem ser muito grandes)
 *.pth
